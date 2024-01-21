@@ -60,10 +60,42 @@ func getTasks(c *gin.Context) {
 
 	c.JSON(http.StatusOK, tasks)
 }
+func getTasksByCompletion(c *gin.Context) {
+	completedParam := c.DefaultQuery("completed", "")
+	completed, err := strconv.ParseBool(completedParam)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid completed parameter"})
+		return
+	}
+
+	filter := bson.M{"done": completed}
+	options := options.Find()
+	cursor, err := collection.Find(context.TODO(), filter, options)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer cursor.Close(context.TODO())
+
+	var tasks []task
+	for cursor.Next(context.TODO()) {
+		var t task
+		err := cursor.Decode(&t)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		tasks = append(tasks, t)
+	}
+
+	c.JSON(http.StatusOK, tasks)
+}
 
 func getTasksByID(c *gin.Context) {
 	idParam := c.Param("id")
-	id, err := strconv.Atoi(idParam)
+	fmt.Println(idParam)
+	id, err := primitive.ObjectIDFromHex(idParam)
+	fmt.Println(id, err)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
 		return
@@ -150,6 +182,7 @@ func postTask(c *gin.Context) {
 func deleteTaskByID(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := primitive.ObjectIDFromHex(idParam)
+
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
 		return
@@ -191,6 +224,7 @@ func main() {
 	fmt.Println(collection)
 	router := gin.Default()
 	router.GET("/tasks", getTasks)
+	router.GET("/tasks/completed", getTasksByCompletion)
 	router.GET("/tasks/:id", getTasksByID)
 	router.POST("/task", postTask)
 	router.PUT("/tasks/:id", updateTaskByID)
